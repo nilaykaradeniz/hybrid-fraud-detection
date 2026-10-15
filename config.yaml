@@ -1,0 +1,88 @@
+# Settings for the HybridFraudDetection pipeline.
+# The keys say how each threshold is compared:
+#   _above means >, _at_least means >=, _at_most means <=, _below means <, _equals means ==.
+
+data:
+  path: data/transactions.csv
+
+quality:
+  auth_results: [AUTHORISED, INSUFFICIENT_FUNDS_OR_LIMIT_EXCEEDED, ERROR, REFUSED, FRAUD]
+  whole_number_columns: [book_window, length_of_stay, property_age]
+  positive_columns: [price_euro]                                       # must be > 0
+  non_negative_columns: [book_window, length_of_stay, property_age]    # must be >= 0
+  non_card_payment_methods: [paypal, klarna]                           # used by check Q9
+
+split:
+  train_last_day: 14                  # days 1 to 14 train, days 15 to 31 test
+
+split_check:
+  raw_columns: [booker_country, card_issuing_country, hotel_country, language, payment_method,
+                email_domain, auth_result, price_euro, book_window, length_of_stay, property_age]
+  psi_bins: 10                        # value ranges for a number column
+  psi_min_share: 0.0001               # lowest share used in the PSI formula
+  psi_shift_limits: [0.1, 0.25]       # below 0.1 stable, below 0.25 small shift, else large shift
+  bootstrap_rounds: 500               # resamples for the 95% intervals of the test metrics
+  sensitivity_last_days: [10, 14, 18] # other split days to try
+
+labels:
+  min_cluster_size: 2                # a cluster needs at least 2 attempts
+
+features:
+  declined_results: [REFUSED, FRAUD, ERROR]
+  hard_declined_results: [REFUSED, FRAUD]
+  value_band_percentiles: [33, 66]
+  high_price_percentile: 90
+  language_country:
+    German: Germany
+    Swedish: Sweden
+    Dutch: Netherlands
+    Hungarian: Hungary
+    Luxembourgish: Luxembourg
+    Spanish: Spain
+    French: France
+    Norwegian: Norway
+    Bulgarian: Bulgaria
+    Danish: Denmark
+    Italian: Italy
+    Icelandic: Iceland
+    Finnish: Finland
+    Slovak: Slovakia
+    Maltese: Malta
+
+rules:
+  R1:  {group: hard, action: step_up, card_attempts_day_above: 3}
+  R2:  {group: hard, action: block, hard_declines_prev_day_at_least: 2}
+  R3:  {group: hard, action: manual_review, distinct_cards_or_emails_per_ip_day_above: 5}
+  R4:  {group: hard, action: manual_review, hold_payout: true, property_age_below: 3, book_window_at_most: 7}
+  R5:  {group: hard, action: manual_review, same_property_attempts_7d_above: 3}
+  R9:  {group: hard, action: manual_review, hold_payout: true, property_attempts_day_above: 10}
+  R10: {group: hard, action: manual_review, hold_payout: true, property_declines_7d_before_at_least: 5}
+  R11: {group: hard, action: manual_review, linked_identities_7d_above: 2}
+  R13: {group: hard, action_card_or_email: block, action_ip_or_property: manual_review}
+  R6:  {group: soft}
+  R7:  {group: soft}
+  R8:  {group: soft, length_of_stay_equals: 0}
+  R12: {group: soft, book_window_at_most: 3}   # and high_price
+
+model:
+  n_estimators: 300                 # trees; scikit-learn's default is 100, more trees depend less on the seed
+  random_state: 42
+  n_jobs: -1
+  band_percentiles: [95, 99]        # of the training scores: medium from the 95th, high from the 99th
+  shap_sample_size: 2000            # attempts in the global SHAP table, to keep it fast
+
+decision:
+  action_order: [allow, allow_and_monitor, step_up, manual_review, block]
+  soft_policy:
+    high_value:  {low: allow_and_monitor, medium: step_up, high: manual_review}
+    other_value: {low: allow, medium: step_up, high: block}
+  rules_only_soft_action: step_up
+
+evaluation:
+  top_shares: [0.05, 0.01]
+  threshold_check_value_share: 0.95
+  label_check_folds: 5
+  tradeoff_percentiles: [80, 90, 95, 97, 99]   # other cut points for the medium risk band
+
+outputs:
+  folder: outputs

@@ -1,0 +1,27 @@
+# Working files that are not part of the project
+PLAN.md
+fraud.duckdb
+docs/veri_kullanimi_adim_adim.pdf
+docs/kod_anlatimi/
+
+# The data file is not shared
+data/*
+!data/.gitkeep
+
+# Saved pipeline runs
+outputs/*
+!outputs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environments and editors
+.venv/
+venv/
+.vscode/
+.idea/
